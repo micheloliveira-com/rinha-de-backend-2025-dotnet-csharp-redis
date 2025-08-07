@@ -17,6 +17,7 @@ public class PaymentBatchInserterService
 
     private IDatabase RedisDb { get; }
     private IReactiveLockTrackerController ReactiveLockTrackerController { get; }
+    private IReactiveLockTrackerState ReactiveLockTrackerState { get; }
     public DefaultOptions Options { get; }
 
     public PaymentBatchInserterService(IConnectionMultiplexer redis,
@@ -25,12 +26,16 @@ public class PaymentBatchInserterService
     {
         RedisDb = redis.GetDatabase();
         ReactiveLockTrackerController = reactiveLockTrackerFactory.GetTrackerController(Constant.REACTIVELOCK_REDIS_NAME);
+        ReactiveLockTrackerState = reactiveLockTrackerFactory.GetTrackerState(Constant.REACTIVELOCK_REDIS_NAME);
         Options = options.Value;
     }
 
     public async Task<int> AddAsync(PaymentInsertParameters payment)
     {
-        await ReactiveLockTrackerController.IncrementAsync().ConfigureAwait(false);
+        bool isNotBlocked = !await ReactiveLockTrackerState.IsBlockedAsync();
+        if (isNotBlocked)
+            await ReactiveLockTrackerController.IncrementAsync().ConfigureAwait(false);
+            
         Buffer.Enqueue(payment);
 
         if (Buffer.Count >= Options.BATCH_SIZE)
