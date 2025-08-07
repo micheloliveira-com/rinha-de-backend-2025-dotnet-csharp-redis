@@ -7,7 +7,7 @@ services:
       - payment-processor
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - WORKER_SIZE=10
+      - WORKER_SIZE=15
       - BATCH_SIZE=100
       - ConnectionStrings__default=http://payment-processor-default:8080
       - ConnectionStrings__fallback=http://payment-processor-fallback:8080
@@ -37,7 +37,7 @@ services:
       - payment-processor
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - WORKER_SIZE=10
+      - WORKER_SIZE=15
       - BATCH_SIZE=100
       - ConnectionStrings__default=http://payment-processor-default:8080
       - ConnectionStrings__fallback=http://payment-processor-fallback:8080
