@@ -34,7 +34,8 @@ public class CountingHandler : DelegatingHandler
         }
         finally
         {
-            await ReactiveLockTrackerController.DecrementAsync().ConfigureAwait(false);
+            if (isNotBlocked)
+                await ReactiveLockTrackerController.DecrementAsync().ConfigureAwait(false);
         }
     }
 }
