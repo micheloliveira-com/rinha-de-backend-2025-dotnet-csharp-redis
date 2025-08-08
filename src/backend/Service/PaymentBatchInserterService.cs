@@ -60,16 +60,11 @@ public class PaymentBatchInserterService
             if (batch.Count == 0)
                 break;
 
-            var tasks = new List<Task>();
-
             foreach (var payment in batch)
             {
                 string json = JsonSerializer.Serialize(payment, JsonContext.Default.PaymentInsertParameters);
-                var task = RedisDb.ListRightPushAsync(Constant.REDIS_PAYMENTS_BATCH_KEY, json);
-                tasks.Add(task);
+                await RedisDb.ListRightPushAsync(Constant.REDIS_PAYMENTS_BATCH_KEY, json);
             }
-
-            await Task.WhenAll(tasks).ConfigureAwait(false);
 
             totalInserted += batch.Count;
 
