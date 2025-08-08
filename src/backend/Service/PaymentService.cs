@@ -51,7 +51,7 @@ public class PaymentService
 
     public async Task<IResult> PurgePaymentsAsync()
     {
-        await RedisDb.ExecuteAsync("FLUSHDB").ConfigureAwait(false);
+        await RedisDb.KeyDeleteAsync(Constant.REDIS_PAYMENTS_BATCH_KEY).ConfigureAwait(false);
         return Results.Ok("Payments removed from Redis.");
     }
 
