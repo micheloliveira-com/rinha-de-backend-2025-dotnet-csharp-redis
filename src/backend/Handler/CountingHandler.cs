@@ -24,8 +24,8 @@ public class CountingHandler : DelegatingHandler
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        bool isNotBlocked = !await ReactiveLockTrackerState.IsBlockedAsync();
-        if (isNotBlocked)
+        //bool isNotBlocked = !await ReactiveLockTrackerState.IsBlockedAsync();
+        //if (isNotBlocked)
             await ReactiveLockTrackerController.IncrementAsync().ConfigureAwait(false);
 
         try
@@ -34,7 +34,7 @@ public class CountingHandler : DelegatingHandler
         }
         finally
         {
-            if (isNotBlocked)
+            //if (isNotBlocked)
                 await ReactiveLockTrackerController.DecrementAsync().ConfigureAwait(false);
         }
     }

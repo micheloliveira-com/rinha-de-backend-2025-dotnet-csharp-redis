@@ -32,8 +32,8 @@ public class PaymentBatchInserterService
 
     public async Task<int> AddAsync(PaymentInsertParameters payment)
     {
-        bool isNotBlocked = !await ReactiveLockTrackerState.IsBlockedAsync();
-        if (isNotBlocked)
+        //bool isNotBlocked = !await ReactiveLockTrackerState.IsBlockedAsync();
+        //if (isNotBlocked)
             await ReactiveLockTrackerController.IncrementAsync().ConfigureAwait(false);
             
         Buffer.Enqueue(payment);
