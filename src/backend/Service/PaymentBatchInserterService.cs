@@ -5,7 +5,6 @@ using System.Data;
 using System.Diagnostics;
 using System.Text.Json;
 using System.Threading.Tasks;
-using Dapper;
 using MichelOliveira.Com.ReactiveLock.Core;
 using MichelOliveira.Com.ReactiveLock.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -17,6 +16,7 @@ public class PaymentBatchInserterService
 
     private IDatabase RedisDb { get; }
     private IReactiveLockTrackerController ReactiveLockTrackerController { get; }
+    private IReactiveLockTrackerState ReactiveLockTrackerState { get; }
     public DefaultOptions Options { get; }
 
     public PaymentBatchInserterService(IConnectionMultiplexer redis,
@@ -25,12 +25,14 @@ public class PaymentBatchInserterService
     {
         RedisDb = redis.GetDatabase();
         ReactiveLockTrackerController = reactiveLockTrackerFactory.GetTrackerController(Constant.REACTIVELOCK_REDIS_NAME);
+        ReactiveLockTrackerState = reactiveLockTrackerFactory.GetTrackerState(Constant.REACTIVELOCK_REDIS_NAME);
         Options = options.Value;
     }
 
     public async Task<int> AddAsync(PaymentInsertParameters payment)
     {
         await ReactiveLockTrackerController.IncrementAsync().ConfigureAwait(false);
+            
         Buffer.Enqueue(payment);
 
         if (Buffer.Count >= Options.BATCH_SIZE)
@@ -55,16 +57,11 @@ public class PaymentBatchInserterService
             if (batch.Count == 0)
                 break;
 
-            var tasks = new List<Task>();
-
             foreach (var payment in batch)
             {
                 string json = JsonSerializer.Serialize(payment, JsonContext.Default.PaymentInsertParameters);
-                var task = RedisDb.ListRightPushAsync(Constant.REDIS_PAYMENTS_BATCH_KEY, json);
-                tasks.Add(task);
+                await RedisDb.ListRightPushAsync(Constant.REDIS_PAYMENTS_BATCH_KEY, json);
             }
-
-            await Task.WhenAll(tasks).ConfigureAwait(false);
 
             totalInserted += batch.Count;
 
