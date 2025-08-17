@@ -1,7 +1,7 @@
 using System.Data;
 using System.Diagnostics.CodeAnalysis;
+using System.Text;
 using System.Text.Json;
-using Dapper;
 using MichelOliveira.Com.ReactiveLock.Core;
 using MichelOliveira.Com.ReactiveLock.DependencyInjection;
 using StackExchange.Redis;
@@ -13,14 +13,15 @@ public class PaymentService
     private IDatabase RedisDb { get; }
     private PaymentBatchInserterService BatchInserter { get; }
     private IReactiveLockTrackerState ReactiveLockTrackerState { get; }
-    private HttpClient HttpDefault { get; }
+    private PaymentProcessorService PaymentProcessorService { get; }
+
 
     public PaymentService(
         ConsoleWriterService consoleWriterService,
-        IHttpClientFactory factory,
         IConnectionMultiplexer redis,
         PaymentBatchInserterService batchInserter,
-        IReactiveLockTrackerFactory reactiveLockTrackerFactory
+        IReactiveLockTrackerFactory reactiveLockTrackerFactory,
+        PaymentProcessorService paymentProcessorService
     )
     {
         ConsoleWriterService = consoleWriterService;
@@ -28,8 +29,7 @@ public class PaymentService
         RedisDb = redis.GetDatabase();
         BatchInserter = batchInserter;
         ReactiveLockTrackerState = reactiveLockTrackerFactory.GetTrackerState(Constant.REACTIVELOCK_API_PAYMENTS_SUMMARY_NAME);
-
-        HttpDefault = factory.CreateClient(Constant.DEFAULT_PROCESSOR_NAME);
+        PaymentProcessorService = paymentProcessorService;
     }
 
 
@@ -88,17 +88,28 @@ public class PaymentService
         }
         var requestedAt = DateTimeOffset.UtcNow;
         await ReactiveLockTrackerState.WaitIfBlockedAsync().ConfigureAwait(false);
-        var response = await HttpDefault.PostAsJsonAsync("/payments", new ProcessorPaymentRequest
-        (
-            request.Amount,
-            requestedAt,
-            request.CorrelationId
-        ), JsonContext.Default.ProcessorPaymentRequest).ConfigureAwait(false);
+        
+        string jsonString = $@"{{
+            ""amount"": {request.Amount},
+            ""requestedAt"": ""{requestedAt:o}"",
+            ""correlationId"": ""{request.CorrelationId}""
+        }}";
+
+        var content = new StringContent(jsonString, Encoding.UTF8, "application/json");
+
+        var httpRequest = new HttpRequestMessage(HttpMethod.Post, "/payments")
+        {
+            Content = content
+        };
+
+        httpRequest.Options.Set(new HttpRequestOptionsKey<DateTimeOffset>("RequestedAt"), requestedAt);
+
+        (HttpResponseMessage response, string processor) = await PaymentProcessorService.ProcessPaymentAsync(request, requestedAt);
         if (response.IsSuccessStatusCode)
         {
             var parameters = new PaymentInsertParameters(
                 CorrelationId: request.CorrelationId,
-                Processor: Constant.DEFAULT_PROCESSOR_NAME,
+                Processor: processor,
                 Amount: request.Amount,
                 RequestedAt: requestedAt
             );

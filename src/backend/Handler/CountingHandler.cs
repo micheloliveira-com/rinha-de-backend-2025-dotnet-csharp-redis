@@ -15,16 +15,38 @@ public class CountingHandler : DelegatingHandler
 {
     private IReactiveLockTrackerController ReactiveLockTrackerController { get; set; }
     private IReactiveLockTrackerState ReactiveLockTrackerState { get; set; }
+    public IReactiveLockTrackerFactory ReactiveLockTrackerFactory { get; }
+    public RunningPaymentsSummaryData RunningPaymentsSummaryData { get; }
 
-    public CountingHandler(IReactiveLockTrackerFactory reactiveLockTrackerFactory)
+    public CountingHandler(IReactiveLockTrackerFactory reactiveLockTrackerFactory, RunningPaymentsSummaryData runningPaymentsSummaryData)
     {
         ReactiveLockTrackerController = reactiveLockTrackerFactory.GetTrackerController(Constant.REACTIVELOCK_HTTP_NAME);
         ReactiveLockTrackerState = reactiveLockTrackerFactory.GetTrackerState(Constant.REACTIVELOCK_HTTP_NAME);
+        ReactiveLockTrackerFactory = reactiveLockTrackerFactory;
+        RunningPaymentsSummaryData = runningPaymentsSummaryData;
     }
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        await ReactiveLockTrackerController.IncrementAsync().ConfigureAwait(false);
+        var shouldIncrement = true;
+        if (request.Options.TryGetValue(new HttpRequestOptionsKey<DateTimeOffset>("RequestedAt"), out var requestedAt))
+        {
+            var currentRunningRanges = RunningPaymentsSummaryData.CurrentRanges.ToList();
+            if (currentRunningRanges.Any())
+            {
+                bool requestIsNotInsideAnySummaryRange = !currentRunningRanges.Any(range =>
+                    (!range.from.HasValue || requestedAt >= range.from.Value) &&
+                    (!range.to.HasValue || requestedAt <= range.to.Value)
+                );
+
+                if (requestIsNotInsideAnySummaryRange)
+                {
+                    shouldIncrement = false;
+                }
+            }
+        }
+        if (shouldIncrement)
+            await ReactiveLockTrackerController.IncrementAsync().ConfigureAwait(false);
 
         try
         {
@@ -32,7 +54,8 @@ public class CountingHandler : DelegatingHandler
         }
         finally
         {
-            await ReactiveLockTrackerController.DecrementAsync().ConfigureAwait(false);
+            if (shouldIncrement)
+                await ReactiveLockTrackerController.DecrementAsync().ConfigureAwait(false);
         }
     }
 }

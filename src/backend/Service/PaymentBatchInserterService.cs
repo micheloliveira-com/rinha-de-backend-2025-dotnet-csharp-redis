@@ -5,7 +5,6 @@ using System.Data;
 using System.Diagnostics;
 using System.Text.Json;
 using System.Threading.Tasks;
-using Dapper;
 using MichelOliveira.Com.ReactiveLock.Core;
 using MichelOliveira.Com.ReactiveLock.DependencyInjection;
 using Microsoft.Extensions.Options;
